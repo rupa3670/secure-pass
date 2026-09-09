@@ -147,7 +147,7 @@ export default function HomeNavbar() {
                     </div>
                   </div>
                   <Link
-                    href="/profile"
+                    href="/dashboard/profile"
                     onPress={() => setIsAccountOpen(false)}
                     className="flex items-center gap-2.5 px-3.5 py-2 text-sm text-slate-300 hover:bg-slate-800/70"
                   >
@@ -215,7 +215,7 @@ export default function HomeNavbar() {
             {user ? (
               <>
                 <Link
-                  href="/profile"
+                  href="/dashboard/profile"
                   onPress={() => setIsMenuOpen(false)}
                   className="flex items-center gap-2.5 rounded-md px-2 py-2.5 text-sm text-slate-200"
                 >

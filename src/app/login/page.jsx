@@ -29,22 +29,18 @@ export default function LoginPage() {
       const { data, error } = await authClient.signIn.email({ email, password });
 
       if (error) {
-        // Better Auth returns a generic error for unknown accounts too,
-        // so this also naturally covers "you must register first".
+        
         toast.error(error.message || "Invalid email or password.");
         return;
       }
 
-      // 2FA enabled হলে full user data এখনো নেই — verify page এ পাঠাও।
-      // (Vault unlock এর জন্য salt লাগবে, সেটা 2FA verify এর পরে করতে হবে —
-      // এই MVP এ শুধু non-2FA flow টা এখন handle করা হচ্ছে।)
+      
       if (data?.twoFactorRedirect) {
         router.push(`/2fa?redirectTo=${encodeURIComponent(redirectTo)}`);
         return;
       }
 
-      // Login সফল — এখন master password + saved salt দিয়ে vault key
-      // derive করে শুধু browser memory তে রাখা হচ্ছে।
+      
       if (data?.user?.vaultSalt) {
         await unlock(password, data.user.vaultSalt);
       }
@@ -96,7 +92,7 @@ export default function LoginPage() {
                 Password
               </label>
               <Link
-                href="/forgot-password"
+                href="/login/forgot-password"
                 className="text-xs text-slate-500 hover:text-slate-300"
               >
                 Forgot password?
