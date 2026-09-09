@@ -29,6 +29,5 @@ export async function proxy(request) {
 }
 
 export const config = {
-  runtime: 'nodejs',
   matcher: ['/dashboard/:path*', '/vault/:path*', '/settings/:path*', '/profile/:path*', '/login', '/register'],
 };
