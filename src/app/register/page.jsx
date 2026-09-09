@@ -24,6 +24,8 @@ export default function RegisterPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [generatorLength, setGeneratorLength] = useState(16);
+
   const [passwordStrength, setPasswordStrength] = useState({
     score: 0,
     label: "",
@@ -70,6 +72,57 @@ export default function RegisterPage() {
       number,
       special,
     });
+  };
+
+  const generatePassword = () => {
+    const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const lowercase = "abcdefghijklmnopqrstuvwxyz";
+    const numbers = "0123456789";
+    const symbols = "!@#$%^&*()_+-=[]{}|;:,.<>?";
+
+    const allCharacters =
+      uppercase + lowercase + numbers + symbols;
+
+    const randomValues = new Uint32Array(generatorLength);
+    crypto.getRandomValues(randomValues);
+
+    let generatedPassword = "";
+
+    generatedPassword +=
+      uppercase[randomValues[0] % uppercase.length];
+
+    generatedPassword +=
+      lowercase[randomValues[1] % lowercase.length];
+
+    generatedPassword +=
+      numbers[randomValues[2] % numbers.length];
+
+    generatedPassword +=
+      symbols[randomValues[3] % symbols.length];
+
+    for (let i = 4; i < generatorLength; i++) {
+      generatedPassword +=
+        allCharacters[randomValues[i] % allCharacters.length];
+    }
+
+    const passwordArray = generatedPassword.split("");
+
+    for (let i = passwordArray.length - 1; i > 0; i--) {
+      const randomIndex = randomValues[i] % (i + 1);
+
+      [passwordArray[i], passwordArray[randomIndex]] = [
+        passwordArray[randomIndex],
+        passwordArray[i],
+      ];
+    }
+
+    const finalPassword = passwordArray.join("");
+
+    setPassword(finalPassword);
+    setConfirmPassword(finalPassword);
+    checkPasswordStrength(finalPassword);
+
+    toast.success("Strong password generated!");
   };
 
   const handleImageChange = (e) => {
@@ -139,11 +192,13 @@ export default function RegisterPage() {
         imageUrl = await uploadAvatar(imageFile);
       }
 
-      // A random salt, unique per user, used later to derive the vault
-      // encryption key from their master password. Not secret — just
-      // needs to be saved so we can re-derive the same key on login.
-      const saltBytes = crypto.getRandomValues(new Uint8Array(16));
-      const vaultSalt = btoa(String.fromCharCode(...saltBytes));
+      const saltBytes = crypto.getRandomValues(
+        new Uint8Array(16)
+      );
+
+      const vaultSalt = btoa(
+        String.fromCharCode(...saltBytes)
+      );
 
       const { error } = await authClient.signUp.email({
         name,
@@ -167,7 +222,8 @@ export default function RegisterPage() {
       router.push("/login");
     } catch (err) {
       toast.error(
-        err.message || "Something went wrong. Please try again."
+        err.message ||
+          "Something went wrong. Please try again."
       );
     } finally {
       setIsSubmitting(false);
@@ -177,6 +233,7 @@ export default function RegisterPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 py-12">
       <div className="w-full max-w-sm p-5 shadow-lg shadow-indigo-100">
+
         <div className="mb-8 flex flex-col items-center">
           <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/25">
             <FiShield className="h-5 w-5 text-emerald-400" />
@@ -195,13 +252,13 @@ export default function RegisterPage() {
           onSubmit={handleSubmit}
           className="flex flex-col gap-4"
         >
+
           <div className="flex flex-col items-center gap-2">
             <label
               htmlFor="avatar"
               className="group relative flex h-20 w-20 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-dashed border-slate-700 bg-slate-900 transition-colors hover:border-emerald-500/50"
             >
               {imagePreview ? (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={imagePreview}
                   alt="Avatar preview"
@@ -264,12 +321,23 @@ export default function RegisterPage() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="password"
-              className="text-sm text-slate-400"
-            >
-              Password
-            </label>
+
+            <div className="flex items-center justify-between">
+              <label
+                htmlFor="password"
+                className="text-sm text-slate-400"
+              >
+                Password
+              </label>
+
+              <button
+                type="button"
+                onClick={generatePassword}
+                className="text-xs font-medium text-emerald-400 hover:text-emerald-300"
+              >
+                Generate Password
+              </button>
+            </div>
 
             <div className="relative">
               <input
@@ -305,10 +373,39 @@ export default function RegisterPage() {
                 )}
               </button>
             </div>
+
+            <div className="flex items-center justify-between">
+              <label
+                htmlFor="generatorLength"
+                className="text-xs text-slate-500"
+              >
+                Password length
+              </label>
+
+              <select
+                id="generatorLength"
+                value={generatorLength}
+                onChange={(e) =>
+                  setGeneratorLength(
+                    Number(e.target.value)
+                  )
+                }
+                className="rounded-md border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-300 outline-none"
+              >
+                <option value={8}>8</option>
+                <option value={12}>12</option>
+                <option value={16}>16</option>
+                <option value={20}>20</option>
+                <option value={24}>24</option>
+                <option value={32}>32</option>
+              </select>
+            </div>
+
           </div>
 
           {password.length > 0 && (
             <div className="mt-1 rounded-lg border border-slate-800 bg-slate-900/50 p-3">
+
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-xs text-slate-500">
                   Password strength
@@ -340,6 +437,7 @@ export default function RegisterPage() {
               </div>
 
               <div className="mt-3 grid grid-cols-1 gap-1 text-xs">
+
                 <p
                   className={
                     passwordStrength.length
@@ -389,11 +487,13 @@ export default function RegisterPage() {
                 >
                   {passwordStrength.special ? "✓" : "○"} Special character
                 </p>
+
               </div>
             </div>
           )}
 
           <div className="flex flex-col gap-1.5">
+
             <label
               htmlFor="confirmPassword"
               className="text-sm text-slate-400"
@@ -426,6 +526,7 @@ export default function RegisterPage() {
                   : "✗ Passwords do not match"}
               </p>
             )}
+
           </div>
 
           <Button
@@ -437,10 +538,12 @@ export default function RegisterPage() {
               ? "Creating account…"
               : "Create account"}
           </Button>
+
         </form>
 
         <p className="mt-6 text-center text-sm text-slate-500">
           Already have an account?{" "}
+
           <Link
             href="/login"
             className="text-emerald-400 hover:text-emerald-300"
@@ -448,6 +551,7 @@ export default function RegisterPage() {
             Log in
           </Link>
         </p>
+
       </div>
     </div>
   );
