@@ -11,9 +11,9 @@ import { FiUser } from "@react-icons/all-files/fi/FiUser";
 import { FiSettings } from "@react-icons/all-files/fi/FiSettings";
 
 const NAV_LINKS = [
-  { label: "Vault", href: "/vault", icon: FiKey },
-  { label: "Profile", href: "/profile", icon: FiUser },
-  { label: "Settings", href: "/settings", icon: FiSettings },
+  { label: "Vault", href: "/dashboard/vault", icon: FiKey },
+//   { label: "Profile", href: "/dashboard/profile", icon: FiUser },
+  { label: "Settings", href: "/dashboard/settings", icon: FiSettings },
 ];
 
 export default function Sidebar({ isOpen, onClose }) {
