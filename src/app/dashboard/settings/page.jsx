@@ -3,10 +3,13 @@
 
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
-import TwoFactorSettings from "@/components/settings/TwoFactorSettings";
+
 import DashboardNavbar from "@/components/dashboard/DasboardNavbar";
 import { FiUser } from "@react-icons/all-files/fi/FiUser";
 import { FiShield } from "@react-icons/all-files/fi/FiShield";
+import TwoFactorSettings from "@/components/dashboard/TwoFactorSettings";
+import ProfilePage from "../profile/page";
+
 
 const TABS = [
   { id: "profile", label: "Profile", icon: FiUser },
@@ -20,7 +23,6 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-slate-950">
-      <DashboardNavbar />
 
       <div className="mx-auto max-w-3xl px-4 py-10">
         <h1 className="text-xl font-semibold text-slate-100">Settings</h1>
@@ -48,28 +50,7 @@ export default function SettingsPage() {
 
         {/* Tab content */}
         <div className="mt-6">
-          {activeTab === "profile" && (
-            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
-              <h3 className="text-sm font-medium text-slate-100">
-                Profile Information
-              </h3>
-              <p className="mt-1 text-xs text-slate-500">
-                Update your name and photo — full editing lives on your{" "}
-                <a href="/profile" className="text-emerald-400 underline">
-                  Profile page
-                </a>
-              </p>
-              <div className="mt-4 flex items-center gap-3">
-                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-800 text-sm font-medium text-slate-200 ring-1 ring-slate-700">
-                  {user?.name?.[0]?.toUpperCase() || "?"}
-                </span>
-                <div>
-                  <p className="text-sm text-slate-200">{user?.name}</p>
-                  <p className="text-xs text-slate-500">{user?.email}</p>
-                </div>
-              </div>
-            </div>
-          )}
+          {activeTab === "profile" && <ProfilePage />}
 
           {activeTab === "security" && (
             <div className="flex flex-col gap-4">
@@ -83,7 +64,7 @@ export default function SettingsPage() {
                   Update your account password
                 </p>
                 <a
-                  href="/forgot-password"
+                  href="/login/forgot-password"
                   className="mt-3 inline-block text-xs text-emerald-400 underline"
                 >
                   Send reset link

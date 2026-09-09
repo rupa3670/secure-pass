@@ -3,6 +3,7 @@ import "./globals.css";
 
 
 import { ToastContainer } from "react-toastify";
+import { VaultKeyProvider } from "@/hooks/useVaultKey";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,10 +27,10 @@ export default function RootLayout({ children }) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-       
+       <VaultKeyProvider>
         {children}
           <ToastContainer theme="dark" position="top-right" />
-       
+       </VaultKeyProvider>
         </body>
     </html>
   );
