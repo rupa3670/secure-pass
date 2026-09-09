@@ -18,7 +18,7 @@ export default function ForgotPasswordPage() {
     try {
       await authClient.requestPasswordReset({
         email,
-        redirectTo: "/reset-password",
+        redirectTo: "/login/reset-password",
       });
 
       // Always show success, even if the email doesn't exist —
