@@ -8,11 +8,13 @@ import { FiShield } from "@react-icons/all-files/fi/FiShield";
 import { FiEye } from "@react-icons/all-files/fi/FiEye";
 import { FiEyeOff } from "@react-icons/all-files/fi/FiEyeOff";
 import { authClient } from "@/lib/auth-client";
+import { useVaultKey } from "@/hooks/useVaultKey";
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirectTo") || "/";
+  const redirectTo = searchParams.get("redirectTo") || "/dashboard";
+  const { unlock } = useVaultKey();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,13 +26,27 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const { error } = await authClient.signIn.email({ email, password });
+      const { data, error } = await authClient.signIn.email({ email, password });
 
       if (error) {
         // Better Auth returns a generic error for unknown accounts too,
         // so this also naturally covers "you must register first".
         toast.error(error.message || "Invalid email or password.");
         return;
+      }
+
+      // 2FA enabled হলে full user data এখনো নেই — verify page এ পাঠাও।
+      // (Vault unlock এর জন্য salt লাগবে, সেটা 2FA verify এর পরে করতে হবে —
+      // এই MVP এ শুধু non-2FA flow টা এখন handle করা হচ্ছে।)
+      if (data?.twoFactorRedirect) {
+        router.push(`/2fa?redirectTo=${encodeURIComponent(redirectTo)}`);
+        return;
+      }
+
+      // Login সফল — এখন master password + saved salt দিয়ে vault key
+      // derive করে শুধু browser memory তে রাখা হচ্ছে।
+      if (data?.user?.vaultSalt) {
+        await unlock(password, data.user.vaultSalt);
       }
 
       toast.success("Welcome back!");
@@ -43,8 +59,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 py-12 ">
-      <div className="w-full max-w-sm p-5 shadow-lg shadow-indigo-50">
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 py-12">
+      <div className="w-full max-w-sm">
         {/* Brand */}
         <div className="mb-8 flex flex-col items-center">
           <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/25">
@@ -123,7 +139,7 @@ export default function LoginPage() {
         <p className="mt-6 text-center text-sm text-slate-500">
           Don't have an account?{" "}
           <Link href="/register" className="text-emerald-400 hover:text-emerald-300">
-            Register Now
+            Create one
           </Link>
         </p>
       </div>

@@ -11,6 +11,24 @@ export const auth = betterAuth({
 
   emailAndPassword: {
     enabled: true,
+    // University project e real email service lagbe na —
+    // reset link terminal e print hobe, sekhan theke copy kore test korben.
+    sendResetPassword: async ({ user, url }) => {
+      console.log("🔗 Password reset link for", user.email);
+      console.log(url);
+    },
+  },
+
+  // Protite user er jonno ekta random salt store kora hocche, jeta
+  // diye tar master password theke vault encryption key derive kora hoy.
+  // Salt secret na — just same thakle same key ber hoy.
+  user: {
+    additionalFields: {
+      vaultSalt: {
+        type: "string",
+        required: false,
+      },
+    },
   },
 
   plugins: [

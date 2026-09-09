@@ -76,11 +76,18 @@ export default function RegisterPage() {
         imageUrl = await uploadAvatar(imageFile);
       }
 
+      // A random salt, unique per user, used later to derive the vault
+      // encryption key from their master password. Not secret — just
+      // needs to be saved so we can re-derive the same key on login.
+      const saltBytes = crypto.getRandomValues(new Uint8Array(16));
+      const vaultSalt = btoa(String.fromCharCode(...saltBytes));
+
       const { error } = await authClient.signUp.email({
         name,
         email,
         password,
         image: imageUrl,
+        vaultSalt,
       });
 
       if (error) {
@@ -104,7 +111,7 @@ export default function RegisterPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 py-12">
-      <div className="w-full max-w-sm p-5 shadow-lg shadow-indigo-100">
+      <div className="w-full max-w-sm">
         {/* Brand */}
         <div className="mb-8 flex flex-col items-center">
           <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/25">
