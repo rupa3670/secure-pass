@@ -3,7 +3,7 @@ import "./globals.css";
 
 
 import { ToastContainer } from "react-toastify";
-import { VaultKeyProvider } from "@/hooks/useVaultKey";
+import { VaultKeyProvider } from "@/context/VaultKeyContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

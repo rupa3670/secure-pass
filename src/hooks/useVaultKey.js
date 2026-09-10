@@ -1,25 +1,15 @@
-// src/hooks/useVaultKey.js
-'use client';
-import { createContext, useContext, useState } from 'react';
-import { deriveKey } from '@/lib/crypto';
+"use client";
 
-const VaultKeyContext = createContext(null);
+// This file no longer creates its own Context.
+// It shares the single VaultKeyContext defined in @/context/VaultKeyContext
+// so that VaultKeyProvider's value is always reachable from here.
+import { useContext } from "react";
+import { VaultKeyContext } from "@/context/VaultKeyContext";
 
-export function VaultKeyProvider({ children }) {
-  const [vaultKey, setVaultKey] = useState(null); // CryptoKey, RAM e thake, kokhono save hoy na
-
-  const unlock = async (masterPassword, salt) => {
-    const key = await deriveKey(masterPassword, salt);
-    setVaultKey(key);
-  };
-
-  const lock = () => setVaultKey(null); // auto-lock/logout er somoy call koro
-
-  return (
-    <VaultKeyContext.Provider value={{ vaultKey, unlock, lock }}>
-      {children}
-    </VaultKeyContext.Provider>
-  );
+export function useVaultKey() {
+  const context = useContext(VaultKeyContext);
+  if (!context) {
+    throw new Error("useVaultKey must be used within a VaultKeyProvider");
+  }
+  return context;
 }
-
-export const useVaultKey = () => useContext(VaultKeyContext);

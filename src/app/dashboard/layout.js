@@ -1,7 +1,7 @@
 // src/app/dashboard/layout.js
 import DashboardNavbar from "@/components/dashboard/DasboardNavbar";
 import Sidebar from "@/components/dashboard/Sidebar";
-import { VaultKeyProvider } from "@/hooks/useVaultKey";
+import { VaultKeyProvider } from "@/context/VaultKeyContext";
 
 export default function DashboardLayout({ children }) {
   return (

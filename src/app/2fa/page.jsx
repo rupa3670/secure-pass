@@ -13,7 +13,7 @@ export default function TwoFactorPage() {
     e.preventDefault();
     const { error } = await authClient.twoFactor.verifyTotp({ code });
     if (!error) {
-      router.push("/dashboard");
+      router.push("/");
     } else {
       toast.error("Invalid code. Try again.");
     }
