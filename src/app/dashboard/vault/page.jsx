@@ -1,286 +1,336 @@
-// app/dashboard/vault/page.jsx
-'use client';
-import { useEffect, useState } from 'react';
-import { apiFetch } from '@/lib/api';
-import { encryptPassword, decryptPassword } from '@/lib/crypto';
-import { useVaultKey } from '@/hooks/useVaultKey';
-import { Button, Input, Modal, useOverlayState } from '@heroui/react';
-import { 
-  FaShieldAlt, 
-  FaPlus, 
-  FaSearch, 
-  FaGlobe, 
-  FaUser, 
-  FaLock, 
-  FaEye, 
-  FaEyeSlash, 
-  FaTrashAlt, 
-  FaKey, 
-  FaShieldVirus 
-} from 'react-icons/fa';
+"use client";
+
+import { useState, useEffect } from "react";
+import { useVaultKey } from "@/context/VaultKeyContext";
+import { apiFetch } from "@/lib/api";
+import { encryptPassword, decryptPassword } from "@/lib/crypto";
+import { checkPasswordBreach } from "@/lib/breachCheck";
+import { AddModal, EditModal } from "@/components/VaultModal";
+import UnlockScreen from "@/components/UnlockScreen";
+import { toast } from "react-toastify";
+import {
+  FiAlertTriangle,
+  FiCopy,
+  FiEdit2,
+  FiEye,
+  FiEyeOff,
+  FiLock,
+  FiPlus,
+  FiSearch,
+  FiTrash2,
+} from "react-icons/fi";
 
 export default function VaultPage() {
-  const { vaultKey } = useVaultKey();
-  const [entries, setEntries] = useState([]);
-  const [search, setSearch] = useState('');
-  const [revealed, setRevealed] = useState({});
+  const { vaultKey, isUnlocked, lock } = useVaultKey();
+  const [vaults, setVaults] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
-  const modalState = useOverlayState(); 
-  const [form, setForm] = useState({ siteName: '', siteUrl: '', username: '', password: '' });
 
-  const loadEntries = async () => {
-    setLoading(true);
-    try {
-      const query = search ? `?search=${encodeURIComponent(search)}` : '';
-      const data = await apiFetch(`/api/vault${query}`);
-      setEntries(data.entries || []);
-    } catch (err) {
-      console.error("Failed to load vault entries:", err.message);
-      setEntries([]);
-    } finally {
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState(null);
+
+  const [revealedPasswords, setRevealedPasswords] = useState({});
+
+  // Breach status map: { [id]: breachCount }  (0 = safe, >0 = breached, undefined = not checked yet)
+  const [breachStatus, setBreachStatus] = useState({});
+  const [breachScanning, setBreachScanning] = useState(false);
+
+  // Branch: only load data once the vault is actually unlocked
+  useEffect(() => {
+    if (isUnlocked && vaultKey) {
+      fetchVaults();
+    } else {
       setLoading(false);
+      setVaults([]);
+      setRevealedPasswords({});
+      setBreachStatus({});
+    }
+  }, [isUnlocked, vaultKey]);
+
+ const fetchVaults = async () => {
+  try {
+    setLoading(true);
+    const data = await apiFetch("/api/vault");
+    const list = Array.isArray(data) ? data : [];
+    setVaults(list);
+    runBreachScan(list);
+  } catch (error) {
+    console.error("Failed to fetch vault entries:", error);
+    toast.error("Failed to load vault entries.");
+    setVaults([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
+const runBreachScan = async (entries) => {
+  if (!vaultKey || !Array.isArray(entries) || entries.length === 0) return;
+  setBreachScanning(true);
+
+  for (const entry of entries) {
+    try {
+      const plain = await decryptPassword(entry.password, entry.iv, vaultKey);
+      const count = await checkPasswordBreach(plain);
+      setBreachStatus((prev) => ({ ...prev, [entry._id]: count }));
+    } catch (err) {
+      console.error(`Breach check failed for entry ${entry._id}:`, err);
+    }
+  }
+
+  setBreachScanning(false);
+};
+
+  const handleAddSubmit = async (formData) => {
+    try {
+      const breachCount = await checkPasswordBreach(formData.password);
+      if (breachCount > 0) {
+        toast.warning(`Warning: this password has appeared in ${breachCount} data breaches!`);
+      }
+
+      const { encryptedPassword, iv } = await encryptPassword(formData.password, vaultKey);
+
+      const payload = { ...formData, password: encryptedPassword, iv };
+
+      const newEntry = await apiFetch("/api/vault", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      setVaults((prev) => [newEntry, ...prev]);
+      setBreachStatus((prev) => ({ ...prev, [newEntry._id]: breachCount }));
+      setIsAddOpen(false);
+      toast.success("Vault entry added successfully!");
+    } catch (error) {
+      console.error("Error adding entry:", error);
+      toast.error(error.message || "Failed to add entry.");
     }
   };
 
-  useEffect(() => { loadEntries(); }, [search]);
-
-  const handleAdd = async () => {
-    if (!vaultKey) return alert('Vault locked — re-enter master password');
+  const handleUpdateSubmit = async (id, formData) => {
     try {
-      const { encryptedPassword, iv } = await encryptPassword(form.password, vaultKey);
-      await apiFetch('/api/vault', {
-        method: 'POST',
-        body: JSON.stringify({
-          siteName: form.siteName,
-          siteUrl: form.siteUrl,
-          username: form.username,
-          encryptedPassword,
-          iv,
-        }),
+      let breachCount;
+      if (formData.password) {
+        breachCount = await checkPasswordBreach(formData.password);
+        if (breachCount > 0) {
+          toast.warning(`Warning: this password has appeared in ${breachCount} data breaches!`);
+        }
+      }
+
+      const payload = { ...formData };
+      if (formData.password) {
+        const { encryptedPassword, iv } = await encryptPassword(formData.password, vaultKey);
+        payload.password = encryptedPassword;
+        payload.iv = iv;
+      }
+
+      const updatedEntry = await apiFetch(`/api/vault/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
       });
-      setForm({ siteName: '', siteUrl: '', username: '', password: '' });
-      modalState.close();
-      loadEntries();
-    } catch (err) {
-      alert(err.message || 'Failed to add entry');
+
+      setVaults((prev) => prev.map((item) => (item._id === id ? updatedEntry : item)));
+      if (breachCount !== undefined) {
+        setBreachStatus((prev) => ({ ...prev, [id]: breachCount }));
+      }
+      setIsEditOpen(false);
+      setSelectedEntry(null);
+      toast.success("Vault entry updated successfully!");
+    } catch (error) {
+      console.error("Error updating entry:", error);
+      toast.error(error.message || "Failed to update entry.");
     }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this secure entry?')) return;
+    if (!confirm("Are you sure you want to delete this vault entry?")) return;
+
     try {
-      await apiFetch(`/api/vault/${id}`, { method: 'DELETE' });
-      loadEntries();
-    } catch (err) {
-      alert(err.message || 'Failed to delete');
+      await apiFetch(`/api/vault/${id}`, { method: "DELETE" });
+      setVaults((prev) => prev.filter((item) => item._id !== id));
+      setBreachStatus((prev) => {
+        const copy = { ...prev };
+        delete copy[id];
+        return copy;
+      });
+      toast.success("Vault entry deleted.");
+    } catch (error) {
+      console.error("Error deleting entry:", error);
+      toast.error("Failed to delete entry.");
     }
   };
 
-  const handleReveal = async (entry) => {
-    if (!vaultKey) return alert('Vault locked');
-    if (revealed[entry._id]) {
-      setRevealed((prev) => ({ ...prev, [entry._id]: undefined }));
+  const handleReveal = async (id, encryptedPassword, iv) => {
+    if (revealedPasswords[id]) {
+      setRevealedPasswords((prev) => {
+        const copy = { ...prev };
+        delete copy[id];
+        return copy;
+      });
       return;
     }
-    const plain = await decryptPassword(entry.encryptedPassword, entry.iv, vaultKey);
-    setRevealed((prev) => ({ ...prev, [entry._id]: plain }));
+
+    try {
+      const decrypted = await decryptPassword(encryptedPassword, iv, vaultKey);
+      setRevealedPasswords((prev) => ({ ...prev, [id]: decrypted }));
+    } catch (error) {
+      console.error("Decryption failed:", error);
+      toast.error("Failed to decrypt password. Invalid master key.");
+    }
   };
 
-  return (
-    <div className="max-w-6xl mx-auto p-6 lg:p-10 space-y-8 text-slate-100 min-h-screen">
-      
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/50 border border-slate-800/80 p-6 rounded-2xl backdrop-blur-md shadow-xl">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-cyan-950/80 border border-cyan-800/50 rounded-xl text-cyan-400 text-2xl shadow-inner">
-            <FaShieldAlt />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-              Secure Vault
-            </h1>
-            <p className="text-sm text-slate-400 mt-0.5">
-              Manage and decrypt your credentials with military-grade security.
-            </p>
-          </div>
-        </div>
+  const handleCopy = async (entry) => {
+    try {
+      const plain =
+        revealedPasswords[entry._id] ??
+        (await decryptPassword(entry.password, entry.iv, vaultKey));
+      navigator.clipboard.writeText(plain);
+      toast.success("Copied to clipboard!");
+    } catch (error) {
+      console.error("Copy failed:", error);
+      toast.error("Failed to copy password.");
+    }
+  };
 
-        <Button 
-          color="primary" 
-          onPress={modalState.open}
-          className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-medium px-5 py-2.5 rounded-xl shadow-lg shadow-cyan-500/20 hover:opacity-90 transition-all flex items-center gap-2"
-        >
-          <FaPlus className="text-xs" /> Add Password
-        </Button>
+  const filteredVaults = vaults.filter(
+    (item) =>
+      item.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.username?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Branch point: locked vs unlocked view
+  if (!isUnlocked) {
+    return <UnlockScreen />;
+  }
+
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-100">Password Vault</h1>
+          <p className="text-sm text-slate-400">
+            Securely manage and monitor your encrypted credentials.
+            {breachScanning && " Scanning for breaches..."}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsAddOpen(true)}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-500"
+          >
+            <FiPlus className="h-4 w-4" /> Add New Entry
+          </button>
+          <button
+            onClick={lock}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-800 px-4 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800"
+          >
+            <FiLock className="h-4 w-4" /> Lock
+          </button>
+        </div>
       </div>
 
-      {/* Search Bar Section */}
-      <div className="relative max-w-md flex items-center">
-        <span className="absolute left-3 text-slate-400 z-10">
-          <FaSearch />
-        </span>
-        <Input 
-          placeholder="Search by site or username..." 
-          value={search} 
-          onChange={(e) => setSearch(e.target.value)}
-          className="bg-slate-900/40 pl-8"
+      <div className="mt-6 flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2.5">
+        <FiSearch className="h-4 w-4 text-slate-500" />
+        <input
+          type="text"
+          placeholder="Search vault entries..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none"
         />
       </div>
 
-      {/* Vault Entries Grid / List */}
       {loading ? (
-        <div className="flex justify-center items-center py-20 text-cyan-400 animate-pulse font-medium">
-          Loading secure credentials...
+        <div className="mt-12 text-center text-sm text-slate-500">Loading vault records...</div>
+      ) : filteredVaults.length === 0 ? (
+        <div className="mt-12 rounded-2xl border border-dashed border-slate-800 p-12 text-center">
+          <FiLock className="mx-auto h-8 w-8 text-slate-600" />
+          <p className="mt-3 text-sm text-slate-400">No vault entries found.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {entries.map((entry) => (
-            <div 
-              key={entry._id} 
-              className="group relative bg-slate-900/40 border border-slate-800/80 hover:border-cyan-800/50 rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:shadow-cyan-950/30 flex flex-col justify-between gap-4"
-            >
-              <div className="space-y-3">
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-slate-800/80 border border-slate-700/50 flex items-center justify-center text-cyan-400 font-bold">
-                      {entry.siteName?.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-lg text-white group-hover:text-cyan-400 transition-colors">
-                        {entry.siteName}
-                      </h3>
-                      {entry.siteUrl && (
-                        <a 
-                          href={entry.siteUrl} 
-                          target="_blank" 
-                          rel="noreferrer" 
-                          className="text-xs text-slate-400 hover:text-cyan-300 flex items-center gap-1 mt-0.5"
-                        >
-                          <FaGlobe className="text-[10px]" /> {entry.siteUrl}
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                </div>
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {filteredVaults.map((entry) => {
+            const isRevealed = Boolean(revealedPasswords[entry._id]);
+            const displayPassword = isRevealed ? revealedPasswords[entry._id] : "••••••••••••";
+            const breachCount = breachStatus[entry._id];
+            const isBreached = typeof breachCount === "number" && breachCount > 0;
 
-                <div className="bg-slate-950/40 border border-slate-900 rounded-xl p-3 space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-slate-300">
-                    <FaUser className="text-xs text-slate-500" />
-                    <span className="text-slate-400 text-xs">Username:</span>
-                    <span className="font-medium text-slate-200">{entry.username}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <FaKey className="text-xs text-slate-500" />
-                      <span className="text-slate-400 text-xs">Password:</span>
-                    </div>
-                    {revealed[entry._id] ? (
-                      <span className="text-green-400 font-mono text-xs bg-green-950/30 border border-green-900/50 px-2 py-0.5 rounded">
-                        {revealed[entry._id]}
-                      </span>
-                    ) : (
-                      <span className="text-slate-600 font-mono text-xs tracking-widest">
-                        ••••••••••••
+            return (
+              <div
+                key={entry._id}
+                className={`rounded-2xl border p-5 ${
+                  isBreached ? "border-rose-700/60 bg-rose-950/20" : "border-slate-800/80 bg-slate-900/40"
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="font-medium text-slate-100">{entry.title}</h3>
+                    {isBreached && (
+                      <span title={`Found in ${breachCount} breaches`}>
+                        <FiAlertTriangle className="h-4 w-4 text-rose-400" />
                       </span>
                     )}
                   </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        setSelectedEntry(entry);
+                        setIsEditOpen(true);
+                      }}
+                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                    >
+                      <FiEdit2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(entry._id)}
+                      className="rounded-lg p-1.5 text-rose-400 hover:bg-slate-800 hover:text-rose-300"
+                    >
+                      <FiTrash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <p className="mt-1 text-xs text-slate-500">{entry.username}</p>
+
+                {isBreached && (
+                  <p className="mt-1 text-xs text-rose-400">
+                    Seen in {breachCount.toLocaleString()} data breaches — change this password.
+                  </p>
+                )}
+
+                <div className="mt-4 flex items-center justify-between rounded-xl bg-slate-950/60 px-3 py-2 font-mono text-xs text-slate-300">
+                  <span className="truncate">{displayPassword}</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleReveal(entry._id, entry.password, entry.iv)}
+                      className="text-slate-400 hover:text-slate-200"
+                    >
+                      {isRevealed ? <FiEyeOff className="h-4 w-4" /> : <FiEye className="h-4 w-4" />}
+                    </button>
+                    <button onClick={() => handleCopy(entry)} className="text-slate-400 hover:text-emerald-400">
+                      <FiCopy className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800/60">
-                <Button 
-                  size="sm" 
-                  variant="flat" 
-                  onPress={() => handleReveal(entry)}
-                  className="bg-slate-800/60 hover:bg-slate-800 text-slate-300 hover:text-white"
-                >
-                  {revealed[entry._id] ? <FaEyeSlash className="text-xs inline mr-1" /> : <FaEye className="text-xs inline mr-1" />}
-                  {revealed[entry._id] ? 'Hide' : 'Reveal'}
-                </Button>
-                
-                <Button 
-                  size="sm" 
-                  color="danger" 
-                  variant="flat" 
-                  onPress={() => handleDelete(entry._id)}
-                  className="bg-red-950/30 hover:bg-red-950/60 text-red-400 border border-red-900/30"
-                >
-                  <FaTrashAlt className="text-xs inline mr-1" /> Delete
-                </Button>
-              </div>
-            </div>
-          ))}
-
-          {entries.length === 0 && (
-            <div className="col-span-full flex flex-col items-center justify-center py-16 text-center bg-slate-900/20 border border-slate-800/50 rounded-2xl">
-              <FaShieldVirus className="text-4xl text-slate-600 mb-3" />
-              <p className="text-slate-400 font-medium">No secure entries found.</p>
-              <p className="text-slate-600 text-sm mt-1">Click on "+ Add Password" to securely store your first credential.</p>
-            </div>
-          )}
+            );
+          })}
         </div>
       )}
 
-      {/* v3 compound Modal structure */}
-      <Modal state={modalState}>
-        <Modal.Backdrop className="bg-black/80 backdrop-blur-sm">
-          <Modal.Container>
-            <Modal.Dialog className="bg-[#0b101b] border border-slate-800 text-white rounded-2xl shadow-2xl p-2">
-              <Modal.Header className="border-b border-slate-800 pb-4">
-                <Modal.Heading className="text-lg font-bold flex items-center gap-2 text-cyan-400">
-                  <FaLock className="text-sm" /> Add New Password
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="space-y-4 py-4">
-                <Input 
-                  label="Site Name" 
-                  placeholder="e.g. Google, GitHub"
-                  value={form.siteName} 
-                  onChange={(e) => setForm({ ...form, siteName: e.target.value })} 
-                />
-                <Input 
-                  label="Site URL" 
-                  placeholder="https://example.com"
-                  value={form.siteUrl} 
-                  onChange={(e) => setForm({ ...form, siteUrl: e.target.value })} 
-                />
-                <Input 
-                  label="Username / Email" 
-                  placeholder="you@example.com"
-                  value={form.username} 
-                  onChange={(e) => setForm({ ...form, username: e.target.value })} 
-                />
-                <Input 
-                  label="Password" 
-                  type="password" 
-                  placeholder="••••••••••••"
-                  value={form.password} 
-                  onChange={(e) => setForm({ ...form, password: e.target.value })} 
-                />
-              </Modal.Body>
-              <Modal.Footer className="border-t border-slate-800 pt-4 flex justify-end gap-2">
-                <Button 
-                  variant="light" 
-                  onPress={modalState.close}
-                  className="text-slate-400 hover:text-white"
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  color="primary" 
-                  onPress={handleAdd}
-                  className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-medium"
-                >
-                  Save Entry
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
-
+      <AddModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onSubmit={handleAddSubmit} />
+      {selectedEntry && (
+        <EditModal
+          isOpen={isEditOpen}
+          onClose={() => {
+            setIsEditOpen(false);
+            setSelectedEntry(null);
+          }}
+          entry={selectedEntry}
+          onSubmit={handleUpdateSubmit}
+          vaultKey={vaultKey}
+        />
+      )}
     </div>
   );
 }

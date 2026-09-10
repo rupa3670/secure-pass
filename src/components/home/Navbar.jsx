@@ -17,7 +17,7 @@ const NAV_LINKS = [
   { label: "Home", href: "/" },
   { label: "Features", href: "/#features" },
   { label: "Security", href: "/#security" },
-  { label: "Pricing", href: "/#pricing" },
+ 
 ];
 
 export default function HomeNavbar() {
